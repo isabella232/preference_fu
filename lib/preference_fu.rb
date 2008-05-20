@@ -9,6 +9,11 @@ module PreferenceFu
   
   module ClassMethods
     
+    def preference_to_bitmask(preference)
+      self.preference_options.each_key { |k| return k if self.preference_options[k][:key] == preference}
+      return 0 
+    end
+    
     def has_preferences(*options)
       alias_method_chain :initialize, :preferences
       
@@ -97,6 +102,16 @@ module PreferenceFu
       
       update_permissions
       
+    end
+    
+    def method_missing(name,*args)
+      name = name.to_s
+      instance_variable_name = "@" + name[0..-2]
+      if name[-1] == ?? and instance_variable_defined?(instance_variable_name)
+        return instance_variable_get(instance_variable_name)
+      else
+        super
+      end
     end
     
     def each
