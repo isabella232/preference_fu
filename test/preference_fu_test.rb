@@ -8,6 +8,7 @@ class PreferenceFuTest < Test::Unit::TestCase
   def setup
     setup_db
     @person = Person.new
+    @task = Task.new
   end
 
   def teardown
@@ -55,6 +56,42 @@ class PreferenceFuTest < Test::Unit::TestCase
   
   def test_lookup_index_of_key
     assert_equal 4, @person.prefs.index(:delete_user)
+  end
+  
+  def test_second_preference
+    @person.reminders[:birthday] = true
+    @person.save
+    @new_person = Person.find(:first)
+    assert_equal [true, false], @new_person.reminders.map { |k, v| v }
+  end
+  
+  def test_interference
+    @person.reminders = {:birthday => true,:holiday => true}
+    @person.prefs = {:send_email => false, :change_theme => false, :delete_user => false, :create_user => false}
+    @person.save
+    @new_person = Person.find(:first)
+    assert_equal [true, true], @new_person.reminders.map { |k, v| v }
+    assert_equal [false, false, false, false], @new_person.prefs.map { |k, v| v }
+    
+  end
+  
+  
+  def test_access_by_method_missing
+    @person.reminders[:birthday] = true
+    assert_equal @person.reminders[:birthday], @person.reminders.birthday?
+  end
+  
+  def test_preferences_on_different_models
+    @person.reminders[:birthday] = true
+    @task.reminders[:birthday] = false
+    assert_equal @person.reminders[:birthday], true
+    assert_equal @task.reminders[:birthday], false
+    @task.save
+    @person.save
+    @new_person = Person.find(:first)
+    assert_equal [true, false], @new_person.reminders.map { |k, v| v }
+    @new_task = Task.find(:first)
+    assert_equal [false, true], @new_task.reminders.map { |k, v| v }
   end
   
 end

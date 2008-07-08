@@ -1,91 +1,60 @@
 module PreferenceFu
   
   def self.included(receiver)
-    #return if receiver.included_modules.include?(PreferenceFu::InstanceMethods)
-    
-    receiver.extend         ClassMethods
-    receiver.send :include, InstanceMethods
+    receiver.extend ClassMethods
   end
   
   module ClassMethods
     
-    def preference_to_bitmask(preference)
-      self.preference_options.each_key { |k| return k if self.preference_options[k][:key] == preference}
-      return 0 
-    end
-    
-    def has_preferences(*options)
-      alias_method_chain :initialize, :preferences
+    def has_preferences(*args)
+      options = args.last.is_a?(Hash) ? args.pop : {}
+      preference_accessor = options.delete(:accessor) || 'preferences'
+      column_name = options.delete(:column) || preference_accessor
+      defaults = options.delete(:default) || {}
       
-      class_eval do
-        class << self
-          alias_method_chain :instantiate, :preferences
-          attr_accessor :preference_options
+      metaclass.instance_exec(preference_accessor) { |preference_accessor|
+        attr_accessor "#{preference_accessor}_options"
+      }
+      
+      self.send("#{preference_accessor}_options=", preference_options =  {})
+      
+      args.each_with_index do |pref,idx|
+        preference_options[2**idx] = { :key => pref.to_sym, :default => defaults[pref.to_sym] || false }
+      end
+      
+      instance_code = <<-end_src
+        def initialize_with_#{preference_accessor}
+          initialize_without_#{preference_accessor}
+          #{preference_accessor} 
+          yield self if block_given?
         end
-      end
       
-      config = { :column => 'preferences' }
-      
-      idx = 0; self.preference_options = {}
-      options.each do |pref|
-        self.preference_options[2**idx] = { :key => pref.to_sym, :default => false }
-        idx += 1
-      end
-      
-      class_eval <<-EOV
+        def #{preference_accessor}
+          @#{preference_accessor}_object ||= Preferences.new(read_attribute('#{column_name}'.to_sym), 
+            self.class.#{preference_accessor}_options, '#{column_name}', self)
+        end
 
-      def preferences_column
-        '#{config[:column]}'
-      end
+        def #{preference_accessor}=(hsh)
+          #{preference_accessor}.store(hsh)
+        end
 
-      EOV
-            
-    end
-    
-    def set_default_preference(key, default)
-      raise ArgumentError.new("Default value must be boolean") unless [true, false].include?(default)
-      idx = preference_options.find { |idx, hsh| hsh[:key] == key.to_sym }.first rescue nil
-      if idx
-        preference_options[idx][:default] = default
-      end
-    end
-    
-    def instantiate_with_preferences(*args)
-      record = instantiate_without_preferences(*args)
-      record.prefs
-      record
+      end_src
+      class_eval(instance_code)
+      alias_method_chain :initialize, preference_accessor
     end
     
   end
-  
-  module InstanceMethods
-    
-    def initialize_with_preferences(attributes = nil)
-      initialize_without_preferences(attributes)
-      prefs # use this to trigger update_permissions in Preferences
-      yield self if block_given?
-    end
-    
-    def prefs
-      @preferences_object ||= Preferences.new(read_attribute(preferences_column.to_sym), self)
-    end
-    
-    def prefs=(hsh)
-      prefs.store(hsh)
-    end
-    
-  end
-  
   
   class Preferences
     
     include Enumerable
     
-    attr_accessor :instance, :options
+    attr_accessor :options
     
-    def initialize(prefs, instance)
+    def initialize(prefs, options,column,instance)
+      @options = options
+      @column = column
       @instance = instance
-      @options = instance.class.preference_options
       
       # setup defaults if prefs is nil
       if prefs.nil?
@@ -100,7 +69,7 @@ module PreferenceFu
         raise(ArgumentError, "Input must be numeric")
       end
       
-      update_permissions
+      update_preference_attribute
       
     end
     
@@ -131,7 +100,7 @@ module PreferenceFu
     def []=(key, value)
       idx, hsh = lookup(key)
       instance_variable_set("@#{key}", is_true(value))
-      update_permissions
+      update_preference_attribute
     end
     
     def index(key)
@@ -154,8 +123,8 @@ module PreferenceFu
     
     private
     
-      def update_permissions
-        instance.write_attribute(instance.preferences_column, self.to_i)
+      def update_preference_attribute
+        @instance.write_attribute(@column, self.to_i)
       end
     
       def is_true(value)

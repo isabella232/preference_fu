@@ -15,6 +15,12 @@ def setup_db
     create_table :people do |t|
       t.string      :name
       t.integer     :preferences
+      t.integer     :reminders
+    end
+    
+    create_table :tasks do |t|
+      t.string      :name
+      t.integer     :reminders
     end
   end
 end
