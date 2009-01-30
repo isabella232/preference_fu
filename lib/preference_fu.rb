@@ -6,6 +6,7 @@ module PreferenceFu
   
   module ClassMethods
     
+    
     def has_preferences(*args)
       options = args.last.is_a?(Hash) ? args.pop : {}
       preference_accessor = options.delete(:accessor) || 'preferences'
@@ -14,6 +15,21 @@ module PreferenceFu
       
       metaclass.instance_exec(preference_accessor) { |preference_accessor|
         attr_accessor "#{preference_accessor}_options"
+        
+        define_method("#{preference_accessor}_bitmask") do |pref_name|
+          idx,hsh = self.send("#{preference_accessor}_options").find { |idx, hsh| hsh[:key] == pref_name }
+          idx
+        end
+        
+        # define_method("instantiate_with_#{preference_accessor}") do |*args|
+        #   record = send("instantiate_without_#{preference_accessor}",*args)
+        #   record.instance_variable_set("@#{preference_accessor}_object",nil)
+        #   record.send preference_accessor
+        #   record
+        # end
+        # 
+        # alias_method_chain :instantiate, preference_accessor
+        
       }
       
       self.send("#{preference_accessor}_options=", preference_options =  {})
@@ -23,12 +39,20 @@ module PreferenceFu
       end
       
       instance_code = <<-end_src
-        def initialize_with_#{preference_accessor}
-          initialize_without_#{preference_accessor}
+        def initialize_with_#{preference_accessor}(*args)
+          initialize_without_#{preference_accessor}(*args)
           #{preference_accessor} 
           yield self if block_given?
         end
-      
+        
+        def reload_with_#{preference_accessor}(*args)
+          res = reload_without_#{preference_accessor}(*args)
+          @#{preference_accessor}_object = nil
+          #{preference_accessor} 
+          res
+        end
+        
+        
         def #{preference_accessor}
           @#{preference_accessor}_object ||= Preferences.new(read_attribute('#{column_name}'.to_sym), 
             self.class.#{preference_accessor}_options, '#{column_name}', self)
@@ -41,6 +65,7 @@ module PreferenceFu
       end_src
       class_eval(instance_code)
       alias_method_chain :initialize, preference_accessor
+      alias_method_chain :reload, preference_accessor
     end
     
   end
@@ -52,6 +77,7 @@ module PreferenceFu
     attr_accessor :options
     
     def initialize(prefs, options,column,instance)
+      return if options.nil? or column.nil? or instance.nil?
       @options = options
       @column = column
       @instance = instance
