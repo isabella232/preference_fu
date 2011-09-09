@@ -16,13 +16,9 @@ Gem::Specification.new do |s|
     "README"
   ]
   s.files = [
-    ".rvmrc",
-    "Gemfile",
-    "Gemfile.lock",
     "MIT-LICENSE",
     "README",
     "Rakefile",
-    "VERSION",
     "init.rb",
     "install.rb",
     "lib/preference_fu.rb",
