@@ -151,7 +151,7 @@ module PreferenceFu
     private
 
       def update_preference_attribute
-        @instance.write_attribute(@column, self.to_i)
+        @instance.send(:write_attribute,@column, self.to_i)
       end
 
       def is_true(value)
