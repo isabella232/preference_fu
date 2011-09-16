@@ -9,6 +9,7 @@ module PreferenceFu
 
     def has_preferences(*args)
       options = args.last.is_a?(Hash) ? args.pop : {}
+      args = args.first if args.first.is_a?(Array)
       preference_accessor = options.delete(:accessor) || 'preferences'
       column_name = options.delete(:column) || preference_accessor
       defaults = options.delete(:default) || {}
